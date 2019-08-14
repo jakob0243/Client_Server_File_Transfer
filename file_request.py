@@ -1,4 +1,6 @@
-import bitarray    
+'''
+Contains everything needed for creating a FileRequest header
+'''
 
 def create_file_request(file_name):
     name_bytes = bytearray(file_name.encode('utf-8'))
@@ -31,44 +33,6 @@ def create_file_request(file_name):
     
     return request
     
-
-
-#def create_file_request(filename, file_len):
-    #''' Creates a file request... '''
-    #magic_no = 0x497E
-    #print(f"MagicNo: {bin(magic_no)}")
-    
-    #part_two = 1
-    
-    # # Check the length
-    #file_name_len = len(filename)
-    
-    #file_request = 0x0000
-    #print(bin(file_request))
-    #file_request = file_request | (magic_no)
-    #print(bin(file_request))
-    #file_request = file_request << 8
-    #print(bin(file_request))
-    #file_request = file_request | 0x1
-    #print(bin(file_request))
-    #file_request = file_request << 16
-    #print(bin(file_request))
-    #file_request = file_request | file_len
-    #print(bin(file_request))
-    
-    #bits = get_string_bits(filename)
-    #print(len(bin(bits)))
-    
-    #file_request = file_request << (file_len * 8)
-    #file_request = file_request | bits
-    #print(bin(file_request))
-    
-    
-    
-    
-    
     
 if __name__ == "__main__":
-    #create_file_request("hello", 6)
     create_file_request("hello")
-    #s#tring_from_bits('000000000110100001100101011011000110110001101111')

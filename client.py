@@ -25,7 +25,6 @@ def check_port_num(port_num):
 
 def check_file_exists(filename):
     ''' Returns True if the file exists and can be opened locally '''
-    #ciuld use os.path,is_file not sure which is better
     try:
         with open(filename, 'r') as i:
             pass
@@ -54,6 +53,7 @@ def create_socket():
     ''' Creates an instance of socket, prints error message and exits if it doesn't work '''
     try:
         sock = socket.socket()
+        sock.settimeout(1.0) # Sets the timeout of the socket to 1 second
     except Exception as e:
         exit(e, "Could not create a socket.")
         
@@ -73,25 +73,30 @@ def create_connection(sock, addr_info, addr, port_num):
     
 
 def process_server_response(hdr):
-    ''' Checks the the response is a valid FileResponse '''
+    ''' Checks the FileResponse is a valid FileResponse '''
     
+    # Checks Magic Number is valid
     magic_no = (hdr[0] << 8) | hdr[1]
     if magic_no != 0x497E:
         print("Wrong magic no.")
         return False, 0
     
+    # Checks the Type is correct
     if hdr[2] != 0x02:
         print("Wrong type")
         return False, 0
     
+    # Checks that that the file status is valid
     if hdr[3] != 0x00 and hdr[3] != 0x01:
         print("Wrong Status")
         return False, 0 
     
+    # Checks whether the file was found on the server
     if hdr[3] == 0x00:
         print("File not found")
         return False, 0 
     
+    # Calculates the len of the requested file
     length = hdr[4]
     for i in range(5, 8):
         length = (length << 8) | hdr[i]
@@ -100,7 +105,11 @@ def process_server_response(hdr):
 
 
 def check_incoming_data(hdr):
-    ''' '''
+    ''' 
+    Checks what the recieved FileResponse header contains,
+    incoming is returned as True if the file len is > 0 and
+    exists is true if the file exists on the server
+    '''
     if hdr[3] == 0x00:
         exists = False
     else:
@@ -128,7 +137,11 @@ def receive_write_data(sock, outfile):
                 recieving = False
             else:
                 total_bytes += len(data)
-                outfile.write(data.decode('utf-8'))
+                outfile.write(data)
+    except socket.timeout as e:
+        sock.close()
+        outfile.close()
+        exit(e, "The connection timed out")
     except Exception as e:
         sock.close()
         outfile.close()
@@ -142,12 +155,10 @@ def main():
     params = sys.argv
     check_params_len(params)
     address, server_port, file_name = params[1], int(params[2]), params[3]
+    
     print(f"Address: {address}")
-    #print(type(address))
     print(f"Server Port Number: {server_port}")
-    #print(type(server_port))
     print(f"File Name: {file_name}")
-    #print(type(file_name))
     
     # REMOVED FOR TESTING ########
     # Check that the requested file doesnt already exist 
@@ -171,30 +182,41 @@ def main():
     # Sends the FileRequest to the connected server
     print(f"{sock.send(request)} bytes sent.")
     
-    # Read the response
-    data = sock.recv(8)
+    # Receive the response
+    try:
+        data = sock.recv(8)
+    except socket.timeout() as e:
+        socket.close()
+        exit(e, "The socket timed out while receiving.")
     print(data)
+    
+    # Process the received response
     valid, infile_len = process_server_response(data)
     if valid:
         data_coming, exists = check_incoming_data(data)
         
+        # Closes the socket if there is no file coming
         if not data_coming:
             sock.close()
             exit("", "There is no incoming data.")
-            
+        
+        # Closes the socket if the file on the server does not exist
         if not exists:
             sock.close()
             exit("", "The file does not exist on the server")
         
+        # Tries to open the file to write the received data to
         try:
-            outfile = open("done.txt", "w")
+            outfile = open("done.docx", "wb")
         except Exception as e:
             sock.close()
             exit(e, "Could not write the data to a file.")
             
+        # Writes the received data to the opened file
         total = receive_write_data(sock, outfile)
         outfile.close()
         
+        # Checks the len of received data is the same as the expected len
         length = data[4]
         for i in range(5, 8):
             length = (length << 8) | data[i]        
@@ -215,14 +237,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    #print(check_response_valid(bytearray(b'I~\x02\x01\x00\x00\x00\x0b')))
-    '''
-    data = sock.recv(infile_len)
-        try:
-            outfile = open("done.txt", "w")
-            outfile.write(data.decode('utf-8'))
-            outfile.close()
-        except Exception as e:
-            sock.close()
-            exit(e, "Could not write the data to a file.")
-    '''

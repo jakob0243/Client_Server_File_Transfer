@@ -10,9 +10,16 @@ def exit(e, error_msg):
 
 
 def check_port_num(port_num):
-    ''' Checks that the given port number is between 1,024 and 64,000 (including) '''
+    ''' 
+    Checks that the given port number is between 
+    1,024 and 64,000 (including) and it is an integer
+    '''
+    try:
+        port_num = int(port_num)
+    except ValueError as e:
+        exit(e, f"{port_num} could not be converted to an integer.")
     
-    return ((1_024 < port_num) and (port_num <= 64_000))
+    return (((1_024 < port_num) and (port_num <= 64_000)), port_num)
 
 
 def bind_socket(sock, port_num):
@@ -20,8 +27,10 @@ def bind_socket(sock, port_num):
     Trys to bind the given socket to the given port_num, 
     if this fails program exits
     '''
+    host = socket.gethostname()
+    print(f"Hostname: {host}")
     try:
-        sock.bind(('localhost', port_num))
+        sock.bind((host, port_num)) #'localhost', port_num))
     except Exception as e:
         sock.close()
         exit(e, f"Socket could not bind to port {port_num}.")
@@ -32,7 +41,7 @@ def create_socket(port_num):
     # Create socket instance
     try:
         sock = socket.socket()
-        print(sock.fileno())
+        print(f"Socket number: {sock.fileno()}")
     except Exception as e:
         exit(e, f"Could not create the socket.")
         
@@ -75,7 +84,7 @@ def check_header_valid(hdr):
     return True, f_name_len
 
 
-def get_file(filename):
+def get_file_response_contents(filename):
     ''' 
     Attempts to open file, filename, if successful returns the 
     a FileResponse header and the content of the file in a byte array.
@@ -84,10 +93,9 @@ def get_file(filename):
     filename = filename.decode('utf-8')
     # Trys to open the file
     try:
-        infile = open(filename)
-        file_contents = infile.read()
-        infile.close()
-        file_contents = bytearray(file_contents, 'utf-8')
+        with open(filename, "rb") as infile:
+            file_contents = infile.read()
+        #file_contents = bytearray(file_contents) #, 'utf-8')
         file_opened = 1
         response = file_response.create_file_response(file_opened, len(file_contents))
         
@@ -101,15 +109,17 @@ def get_file(filename):
     
 
 def main(port_num):
-    ''' Print the cmd input '''
+    ''' 
+    Creates a server socket, socket then listens and enters a loop
+    accepting connections and recieving FileRequests from client
+    and responding to it.
+    '''
     # Check that port number is valid
-    port_num = int(port_num)
-    port_valid = check_port_num(port_num)
+    port_valid, port_num = check_port_num(port_num)
     if not port_valid:
         exit("", f"{port_num} is not a valid port number.")
     
     print(f"Port Number: {port_num}")
-    print(f"Input type: {type(port_num)}")
     
     # Create socket instance
     sock = create_socket(port_num)
@@ -120,33 +130,45 @@ def main(port_num):
     done = False
     count = 0
     while not done:
+        connection, addr = sock.accept() # Accepts a connection from a client
+        connection.settimeout(1.0) # Sets the time out fro the connection to 1 second
+        
+        print(f"Connected to {addr}")
+        
+        # Trys to recieve a FileRequest from connection
         try:
-            # SET TIME OUT SECTION 3.4
-            connection, addr = sock.accept()
-            
-            with connection:
-                print(f"Connected to {addr}")
-                data = bytearray(connection.recv(5)) # Check difference between this and recvfrom()
-                valid, name_len = check_header_valid(data)
-                if valid:
-                    data = bytearray(connection.recv(int(name_len))) #ERROR CAPTURE
-                    print(data)
-                    response, content = get_file(data)
-                    if not content:
-                        connection.send(response)
-                        raise Exception("The file doesn't exist or couldn't be opened.")
-                    else:
-                        connection.send(response)
-                        connection.send(content)
-                        print(f"{len(content)} bytes of data were successfully sent to {addr}.")
-                        # CHeck File Recieved
-                else:
-                    raise Exception("The File Response Header was erroneous")
-                print("Success!")
-        except Exception as e:
+            data = bytearray(connection.recv(5))
+        except socket.timeout() as e:
+            # If connections times out print error msg and closes connection
+            print(f"{e}\n The connection timed out while recieving from {addr}")
             connection.close()
-            print(e)
+            continue
             
+        valid, name_len = check_header_valid(data) # Checks the recieved header is valid
+        if valid:
+            # Receive the expected filename from the connection
+            data = bytearray(connection.recv(int(name_len)))
+            print(f"Received filename: {data}")
+            
+            # Tries to open file, if it can't be opened content will be None
+            response, content = get_file_response_contents(data)
+            if not content:
+                connection.send(response)
+                print("The file doesn't exist or couldn't be opened.")
+                continue
+            else:
+                # Sends the FileResponse and the actual file
+                connection.send(response)
+                connection.send(content)
+                print(f"{len(content)} bytes of data were successfully sent to {addr}.")
+        else:
+            # If the header isn't valid closes the connection
+            print("The File Response Header was erroneous")
+            connection.close()
+            continue
+               
+        print("Success!")
+        connection.close()
         if count == 0:
             done = True
         count += 1

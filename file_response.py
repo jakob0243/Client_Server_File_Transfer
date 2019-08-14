@@ -1,8 +1,8 @@
+'''
+Contains everything needed for creating a FileResponse header
+'''
+
 def create_file_response(file_opened, data_length=0):
-    #name_bytes = bytearray(file_name.encode('utf-8'))
-    #file_len = len(name_bytes)
-    #print(file_len)
-    #x = file_len
     
     response = bytearray(b'\x00')
     for i in range(0, 7):
@@ -38,6 +38,7 @@ def create_file_response(file_opened, data_length=0):
     print(len(response))
     
     return response
+
 
 if __name__ == "__main__":
     create_file_response(1, 100_000_000)
